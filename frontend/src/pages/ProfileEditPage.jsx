@@ -2,8 +2,10 @@ import { Camera, CheckCircle2, MapPin, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Button from "../components/common/Button.jsx";
+import DesktopProfileEdit from "../components/profile/desktop/DesktopProfileEdit.jsx";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
+import { useResponsive } from "../hooks/useResponsive";
 import { userApi } from "../api/userApi";
 import { sportApi } from "../api/sportApi";
 import { locationApi } from "../api/locationApi";
@@ -60,6 +62,9 @@ const fallbackSportGroups = [
   { category: { id: "fallback-etc", name: "\uae30\ud0c0" }, sports: ["\ubcf5\uc2f1", "\ud074\ub77c\uc774\ubc0d", "\uace8\ud504", "\ub304\uc2a4", "\ubcfc\ub9c1"] }
 ];
 
+
+function MobileProfileEditPage() {
+
 const fallbackCategories = fallbackSportGroups.map((group) => group.category);
 const fallbackSports = fallbackSportGroups.flatMap((group) =>
   group.sports.map((name, index) => ({
@@ -90,6 +95,7 @@ function splitSports(value) {
 }
 
 function ProfileEditPage() {
+
   const navigate = useNavigate();
   const { isMobile } = useResponsive();
   const { user, setCurrentUser } = useAuth();
@@ -467,6 +473,11 @@ function ProfileEditPage() {
       </main>
     </>
   );
+}
+
+function ProfileEditPage() {
+  const { isMobile } = useResponsive();
+  return isMobile ? <MobileProfileEditPage /> : <DesktopProfileEdit />;
 }
 
 export default ProfileEditPage;
