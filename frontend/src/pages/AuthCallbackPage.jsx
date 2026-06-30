@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import MobileHeader from "../components/layout/mobile/MobileHeader.jsx";
 import { useAuth } from "../contexts/AuthContext.jsx";
@@ -13,6 +13,9 @@ function AuthCallbackPage() {
 
     if (!isAuthenticated) {
       setMessage("로그인 세션을 확인하지 못했습니다. 다시 로그인해주세요.");
+      if (authError) {
+        sessionStorage.setItem("sportsmate_auth_error", authError);
+      }
       const timer = window.setTimeout(() => navigate("/login", { replace: true }), 1200);
       return () => window.clearTimeout(timer);
     }
@@ -21,12 +24,6 @@ function AuthCallbackPage() {
     localStorage.removeItem("sportsmate_post_auth_redirect");
     sessionStorage.setItem("sportsmate_flash", "로그인하셨습니다.");
     navigate(redirectPath, { replace: true });
-  }, [loading, isAuthenticated, navigate]);
-  
-      if (authError) {
-      sessionStorage.setItem("sportsmate_auth_error", authError);
-    }
-    navigate("/login", { replace: true });
   }, [loading, isAuthenticated, authError, navigate]);
 
   return (
