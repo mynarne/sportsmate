@@ -39,12 +39,20 @@ const mockNewUsers = [
 
 function AdminPage() {
   const { isMobile } = useResponsive();
-  const [stats, setStats] = useState(mockStats);
-  const [reports, setReports] = useState(mockReports);
-  const [newUsers, setNewUsers] = useState(mockNewUsers);
+  const [reports, setReports] = useState([]);
+  const [newUsers, setNewUsers] = useState([]);
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    usersTrend: "+0명",
+    totalMeetings: 0,
+    meetingsTrend: "+0개",
+    pendingReports: 0,
+    reportsTrend: "대기 중인 신고 없음"
+  });
+
   const [loading, setLoading] = useState(true);
 
-  // Fetch real data from backend API with fallback to mock data
+  // Fetch real data from backend API
   useEffect(() => {
     async function fetchAdminData() {
       try {
@@ -56,14 +64,25 @@ function AdminPage() {
           adminApi.reports()
         ]);
 
-        const updatedStats = { ...mockStats };
-        const updatedReports = [...mockReports];
+        const updatedStats = {
+          totalUsers: 0,
+          usersTrend: "+0명",
+          totalMeetings: 0,
+          meetingsTrend: "+0개",
+          pendingReports: 0,
+          reportsTrend: "대기 중인 신고 없음"
+        };
 
         // 회원 수와 최근 가입 회원 목록을 구성합니다.
         if (usersRes.status === "fulfilled" && usersRes.value?.items) {
-          updatedStats.totalUsers = usersRes.value.items.length;
-          
           const apiUsers = usersRes.value.items;
+          updatedStats.totalUsers = apiUsers.length;
+          
+          const now = new Date();
+          const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const todayNewCount = apiUsers.filter(u => u.created_at && new Date(u.created_at) >= startOfToday).length;
+          updatedStats.usersTrend = `오늘 +${todayNewCount}명`;
+
           const formattedUsers = apiUsers.slice(0, 4).map((u) => {
             let timeText = "방금 전";
             if (u.created_at) {
@@ -109,20 +128,30 @@ function AdminPage() {
           for (let i = formattedUsers.length; i < 4; i++) {
             if (mockNewUsers[i]) formattedUsers.push(mockNewUsers[i]);
           }
-
+          
           setNewUsers(formattedUsers);
         }
 
         // 전체 모임 수를 구성합니다.
         if (meetingsRes.status === "fulfilled" && meetingsRes.value?.items) {
-          updatedStats.totalMeetings = meetingsRes.value.items.length;
+          const apiMeetings = meetingsRes.value.items;
+          updatedStats.totalMeetings = apiMeetings.length;
+          
+          const now = new Date();
+          const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const todayMeetingsCount = apiMeetings.filter(m => m.created_at && new Date(m.created_at) >= startOfToday).length;
+          updatedStats.meetingsTrend = `오늘 +${todayMeetingsCount}개`;
         }
 
         // 신고 대기 수와 최근 신고 목록을 구성합니다.
         if (reportsRes.status === "fulfilled" && reportsRes.value?.items) {
           const apiReports = reportsRes.value.items;
-          updatedStats.pendingReports = apiReports.filter(r => r.status === "대기 중" || r.status === "pending").length;
+          const pendingCount = apiReports.filter(r => r.status === "대기 중" || r.status === "pending").length;
+          updatedStats.pendingReports = pendingCount;
+          updatedStats.reportsTrend = pendingCount > 0 ? "즉각 확인 요망" : "대기 중인 신고 없음";
           
+
+// 충돌 지점
           if (apiReports.length > 0) {
             // API 응답 구조를 관리자 테이블 표시 형식으로 변환합니다.
             const formatted = apiReports.slice(0, 4).map((r, index) => ({
@@ -141,11 +170,24 @@ function AdminPage() {
             
             setReports(formatted);
           }
+ // 26.07.01 충돌 지점 검증필요
+//          const formatted = apiReports.slice(0, 4).map((r, index) => ({
+//           id: r.id || index + 1,
+//            type: r.reason || "기타",
+//            target: r.target_name || r.target_type || `대상 #${r.target_id || ""}`,
+//            reporter: r.reporter_name || "신고자",
+//            date: r.created_at ? new Date(r.created_at).toLocaleDateString() : "2023.10.27",
+//            status: r.status === "pending" || r.status === "대기 중" ? "대기 중" : "처리 완료"
+//          }));
+          
+//          setReports(formatted);
+//        } else {
+//          setReports([]);
         }
 
         setStats(updatedStats);
       } catch (err) {
-        console.error("Failed to load real-time admin data, showing mock database status:", err);
+        console.error("Failed to load real-time admin data:", err);
       } finally {
         setLoading(false);
       }
@@ -166,6 +208,27 @@ function AdminPage() {
 
   if (isMobile) {
     return <MobileAdminPanel title="관리자 운영 관리" />;
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: "400px", gap: "16px" }}>
+        <style>{`
+          @keyframes admin-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
+        <div style={{
+          width: "48px",
+          height: "48px",
+          border: "4px solid #f3f3f3",
+          borderTop: "4px solid #3b82f6",
+          borderRadius: "50%",
+          animation: "admin-spin 1s linear infinite"
+        }}></div>
+        <span style={{ fontSize: "16px", color: "#64748b", fontWeight: 600 }}>대시보드 데이터를 불러오는 중...</span>
+      </div>
+    );
   }
 
   return (
@@ -289,6 +352,13 @@ function AdminPage() {
                       </tr>
                     );
                   })}
+                  {reports.length === 0 && (
+                    <tr>
+                      <td colSpan="6" style={{ textAlign: "center", color: "#94a3b8", padding: "30px" }}>
+                        최근 접수된 신고 내역이 없습니다.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
