@@ -10,8 +10,10 @@ import {
   User
 } from "lucide-react";
 import { adminApi } from "../api/adminApi";
+import MobileAdminPanel from "../components/admin/mobile/MobileAdminPanel.jsx";
+import { useResponsive } from "../hooks/useResponsive";
 
-// 1. Mock data based on the provided screenshot
+// 관리자 API 연결 전에도 화면 구조를 확인할 수 있는 기본 통계 데이터입니다.
 const mockStats = {
   totalUsers: 1240,
   usersTrend: "+12명",
@@ -36,6 +38,9 @@ const mockNewUsers = [
 ];
 
 function AdminPage() {
+  const { isMobile } = useResponsive();
+  const [reports, setReports] = useState([]);
+  const [newUsers, setNewUsers] = useState([]);
   const [stats, setStats] = useState({
     totalUsers: 0,
     usersTrend: "+0명",
@@ -44,8 +49,7 @@ function AdminPage() {
     pendingReports: 0,
     reportsTrend: "대기 중인 신고 없음"
   });
-  const [reports, setReports] = useState([]);
-  const [newUsers, setNewUsers] = useState([]);
+
   const [loading, setLoading] = useState(true);
 
   // Fetch real data from backend API
@@ -53,7 +57,7 @@ function AdminPage() {
     async function fetchAdminData() {
       try {
         setLoading(true);
-        // Execute API calls in parallel
+        // 관리자 요약 데이터는 병렬로 요청합니다.
         const [usersRes, meetingsRes, reportsRes] = await Promise.allSettled([
           adminApi.users(),
           adminApi.meetings(),
@@ -69,7 +73,7 @@ function AdminPage() {
           reportsTrend: "대기 중인 신고 없음"
         };
 
-        // 1. Process users count
+        // 회원 수와 최근 가입 회원 목록을 구성합니다.
         if (usersRes.status === "fulfilled" && usersRes.value?.items) {
           const apiUsers = usersRes.value.items;
           updatedStats.totalUsers = apiUsers.length;
@@ -120,10 +124,15 @@ function AdminPage() {
             };
           });
 
+          // API 데이터가 부족하면 기본 데이터로 빈 영역을 채웁니다.
+          for (let i = formattedUsers.length; i < 4; i++) {
+            if (mockNewUsers[i]) formattedUsers.push(mockNewUsers[i]);
+          }
+          
           setNewUsers(formattedUsers);
         }
 
-        // 2. Process meetings count
+        // 전체 모임 수를 구성합니다.
         if (meetingsRes.status === "fulfilled" && meetingsRes.value?.items) {
           const apiMeetings = meetingsRes.value.items;
           updatedStats.totalMeetings = apiMeetings.length;
@@ -134,25 +143,46 @@ function AdminPage() {
           updatedStats.meetingsTrend = `오늘 +${todayMeetingsCount}개`;
         }
 
-        // 3. Process reports count and list
+        // 신고 대기 수와 최근 신고 목록을 구성합니다.
         if (reportsRes.status === "fulfilled" && reportsRes.value?.items) {
           const apiReports = reportsRes.value.items;
           const pendingCount = apiReports.filter(r => r.status === "대기 중" || r.status === "pending").length;
           updatedStats.pendingReports = pendingCount;
           updatedStats.reportsTrend = pendingCount > 0 ? "즉각 확인 요망" : "대기 중인 신고 없음";
           
-          const formatted = apiReports.slice(0, 4).map((r, index) => ({
-            id: r.id || index + 1,
-            type: r.reason || "기타",
-            target: r.target_name || r.target_type || `대상 #${r.target_id || ""}`,
-            reporter: r.reporter_name || "신고자",
-            date: r.created_at ? new Date(r.created_at).toLocaleDateString() : "2023.10.27",
-            status: r.status === "pending" || r.status === "대기 중" ? "대기 중" : "처리 완료"
-          }));
+
+// 충돌 지점
+          if (apiReports.length > 0) {
+            // API 응답 구조를 관리자 테이블 표시 형식으로 변환합니다.
+            const formatted = apiReports.slice(0, 4).map((r, index) => ({
+              id: r.id || index + 1,
+              type: r.reason || "기타",
+              target: r.target_name || r.target_type || `대상 #${r.target_id || ""}`,
+              reporter: r.reporter_name || "신고자",
+              date: r.created_at ? new Date(r.created_at).toLocaleDateString() : "2023.10.27",
+              status: r.status === "pending" || r.status === "대기 중" ? "대기 중" : "처리 완료"
+            }));
+            
+            // API 데이터가 부족하면 기본 데이터로 빈 영역을 채웁니다.
+            for (let i = formatted.length; i < 4; i++) {
+              if (mockReports[i]) formatted.push(mockReports[i]);
+            }
+            
+            setReports(formatted);
+          }
+ // 26.07.01 충돌 지점 검증필요
+//          const formatted = apiReports.slice(0, 4).map((r, index) => ({
+//           id: r.id || index + 1,
+//            type: r.reason || "기타",
+//            target: r.target_name || r.target_type || `대상 #${r.target_id || ""}`,
+//            reporter: r.reporter_name || "신고자",
+//            date: r.created_at ? new Date(r.created_at).toLocaleDateString() : "2023.10.27",
+//            status: r.status === "pending" || r.status === "대기 중" ? "대기 중" : "처리 완료"
+//          }));
           
-          setReports(formatted);
-        } else {
-          setReports([]);
+//          setReports(formatted);
+//        } else {
+//          setReports([]);
         }
 
         setStats(updatedStats);
@@ -169,13 +199,16 @@ function AdminPage() {
   const handleAction = (reportId, currentStatus) => {
     if (currentStatus === "대기 중") {
       alert(`신고 번호 #${reportId} 처리를 시작합니다.`);
-      // Optimistic update
+      // 화면에서 먼저 처리 완료 상태로 반영합니다.
       setReports(prev => prev.map(r => r.id === reportId ? { ...r, status: "처리 완료" } : r));
     } else {
       alert(`신고 번호 #${reportId} 상세 내역을 조회합니다.`);
     }
   };
 
+  if (isMobile) {
+    return <MobileAdminPanel title="관리자 운영 관리" />;
+  }
   if (loading) {
     return (
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: "400px", gap: "16px" }}>
@@ -200,9 +233,9 @@ function AdminPage() {
 
   return (
     <div className="admin-dashboard">
-      {/* 1. Summary Widget Grid */}
+      {/* 요약 통계 카드 영역입니다. */}
       <section className="admin-stats-grid">
-        {/* Card 1: Total Users */}
+        {/* 전체 회원 카드입니다. */}
         <div className="admin-stat-card">
           <div className="admin-stat-card__main">
             <span className="admin-stat-card__title">전체 회원</span>
@@ -220,7 +253,7 @@ function AdminPage() {
           </div>
         </div>
 
-        {/* Card 2: Total Meetings */}
+        {/* 전체 모임 카드입니다. */}
         <div className="admin-stat-card">
           <div className="admin-stat-card__main">
             <span className="admin-stat-card__title">전체 모임</span>
@@ -238,7 +271,7 @@ function AdminPage() {
           </div>
         </div>
 
-        {/* Card 3: Pending Reports */}
+        {/* 대기 중인 신고 카드입니다. */}
         <div className="admin-stat-card admin-stat-card--danger">
           <div className="admin-stat-card__main">
             <span className="admin-stat-card__title">대기 중인 신고</span>
@@ -256,9 +289,9 @@ function AdminPage() {
         </div>
       </section>
 
-      {/* 2. Main Analytics Columns */}
+      {/* 관리자 주요 분석 영역입니다. */}
       <div className="admin-grid-cols">
-        {/* Left Column: Recent Report list */}
+        {/* 최근 신고 목록입니다. */}
         <section className="admin-panel-card">
           <div className="admin-panel-card__header">
             <h2 className="admin-panel-card__title">신고 관리 (최근)</h2>
@@ -332,7 +365,7 @@ function AdminPage() {
           </div>
         </section>
 
-        {/* Right Column: Newly Joined Members */}
+        {/* 최근 가입 회원 목록입니다. */}
         <section className="admin-panel-card">
           <div className="admin-panel-card__header">
             <h2 className="admin-panel-card__title">최근 가입 회원</h2>
